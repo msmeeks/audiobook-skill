@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio Player</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --text: #22201c;
+  --muted: #5f5a52;
+  --border: #dedad2;
+  --accent: #8a4b14;
+  --accent-text: #ffffff;
+  --hl-sentence: rgba(214, 160, 60, 0.16);
+  --hl-word: rgba(214, 160, 60, 0.38);
+  --focus: #1f5fbf;
+  --shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+  --radius: 10px;
+  --gutter: 16px;
+  --read-font: Charter, "Iowan Old Style", Georgia, serif;
+  --ui-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161514;
+    --surface: #1f1e1c;
+    --text: #ebe7df;
+    --muted: #a8a196;
+    --border: #3a3733;
+    --accent: #e0a35a;
+    --accent-text: #1a1209;
+    --hl-sentence: rgba(224, 163, 90, 0.14);
+    --hl-word: rgba(224, 163, 90, 0.34);
+    --focus: #7fb0ff;
+    --shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161514; --surface: #1f1e1c; --text: #ebe7df; --muted: #a8a196; --border: #3a3733;
+  --accent: #e0a35a; --accent-text: #1a1209; --hl-sentence: rgba(224, 163, 90, 0.14);
+  --hl-word: rgba(224, 163, 90, 0.34); --focus: #7fb0ff; --shadow: 0 -4px 16px rgba(0, 0, 0, 0.4);
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 6rem; scroll-padding-bottom: 10rem; }
+body {
+  margin: 0; background: var(--bg); color: var(--text); font-family: var(--ui-font);
+  -webkit-text-size-adjust: 100%;
+}
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: var(--gutter); top: 8px; z-index: 10; background: var(--surface); padding: 8px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+header {
+  position: sticky; top: 0; z-index: 2; background: var(--bg);
+  border-bottom: 1px solid var(--border); padding: 10px var(--gutter);
+}
+.bar { max-width: 46rem; margin: 0 auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+header h1 { font-size: 0.85rem; font-weight: 600; color: var(--muted); margin: 0; flex: 1 1 100%; }
+.chapter-pick { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; }
+select, button {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  min-height: 44px; padding: 0 12px;
+}
+select { flex: 1 1 auto; min-width: 0; text-overflow: ellipsis; }
+button { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+button:hover { border-color: var(--muted); }
+button:disabled { opacity: 0.45; cursor: default; }
+button svg { width: 20px; height: 20px; fill: currentColor; }
+main { max-width: 46rem; margin: 0 auto; padding: 8px var(--gutter) 14rem; }
+#text { font-family: var(--read-font); font-size: 1.18rem; line-height: 1.75; }
+#text h2 { font-family: var(--ui-font); font-size: 1.5rem; line-height: 1.3; margin: 1.2rem 0 1rem; }
+#text h3 { font-family: var(--ui-font); font-size: 1.08rem; line-height: 1.4; margin: 1.8rem 0 0.4rem; }
+#text p { margin: 0 0 1rem; }
+.s { border-radius: 4px; cursor: pointer; transition: background-color 0.25s; }
+.s:hover { text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 4px; }
+.s.on { background: var(--hl-sentence); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.w.on { background: var(--hl-word); border-radius: 3px; box-shadow: 0 0 0 1px var(--hl-word); }
+.controls {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; background: var(--surface);
+  border-top: 1px solid var(--border); box-shadow: var(--shadow);
+  padding: 10px var(--gutter) calc(10px + env(safe-area-inset-bottom));
+}
+.controls .bar { row-gap: 6px; }
+.seek { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; font-variant-numeric: tabular-nums; font-size: 0.85rem; color: var(--muted); }
+.seek input { flex: 1; }
+input[type="range"] { accent-color: var(--accent); min-height: 32px; margin: 0; }
+.transport { display: flex; gap: 6px; }
+#play { background: var(--accent); color: var(--accent-text); border-color: var(--accent); min-width: 56px; }
+.speed { display: flex; align-items: center; gap: 8px; flex: 1 1 14rem; justify-content: flex-end; font-size: 0.9rem; }
+.speed input { flex: 1; max-width: 14rem; }
+.speed output { min-width: 3.4em; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.speed button { min-height: 32px; padding: 0 8px; font-size: 0.8rem; }
+#follow {
+  position: fixed; right: var(--gutter); bottom: 9.5rem; z-index: 3; box-shadow: var(--shadow);
+  background: var(--surface); font-size: 0.9rem;
+}
+#follow[hidden] { display: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 520px) {
+  #text { font-size: 1.08rem; }
+  .speed { flex-basis: 100%; justify-content: flex-start; }
+  .speed input { max-width: none; }
+  #follow { bottom: 12rem; }
+  main { padding-bottom: 17rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .s { transition: none; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#controls">Skip to player controls</a>
+<header>
+  <div class="bar">
+    <h1 id="album"></h1>
+    <div class="chapter-pick">
+      <button id="prev" type="button" aria-label="Previous chapter"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+      <label class="sr-only" for="chapter">Chapter</label>
+      <select id="chapter"></select>
+      <button id="next" type="button" aria-label="Next chapter"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg></button>
+    </div>
+  </div>
+</header>
+<main>
+  <article id="text" aria-live="off"></article>
+</main>
+<button id="follow" type="button" hidden>Resume following</button>
+<section class="controls" id="controls" aria-label="Player controls" tabindex="-1">
+  <div class="bar">
+    <div class="seek">
+      <span id="cur">0:00</span>
+      <label class="sr-only" for="pos">Position</label>
+      <input id="pos" type="range" min="0" max="0" step="0.1" value="0">
+      <span id="dur">0:00</span>
+    </div>
+    <div class="transport">
+      <button id="back" type="button" aria-label="Back 15 seconds"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>15</button>
+      <button id="play" type="button" aria-label="Play"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="play-icon" d="M8 5v14l11-7z"/></svg></button>
+      <button id="fwd" type="button" aria-label="Forward 15 seconds">15<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/></svg></button>
+    </div>
+    <div class="speed">
+      <label for="speed">Speed</label>
+      <input id="speed" type="range" min="0.5" max="3.5" step="0.25" value="1">
+      <output id="speed-val" for="speed">1×</output>
+      <button id="speed-reset" type="button" aria-label="Reset speed to 1×">1×</button>
+    </div>
+  </div>
+</section>
+<audio id="audio" preload="metadata"></audio>
+<script id="data" type="application/json">__PLAYER_DATA__</script>
+<script id="core">
+const Core = (() => {
+  const SPEED = { min: 0.5, max: 3.5, step: 0.25 };
+
+  function clampSpeed(value) {
+    if (!Number.isFinite(value)) return 1;
+    const snapped = Math.round(value / SPEED.step) * SPEED.step;
+    return Math.min(SPEED.max, Math.max(SPEED.min, snapped));
+  }
+
+  // Kokoro gives sentence timings only; estimate words by spoken length. Mid-sentence
+  // punctuation implies a pause; the final word's pause was trimmed off the audio.
+  function wordTimes(sentence) {
+    const words = sentence.text.split(/\s+/).filter(Boolean);
+    const weights = words.map((w, i) => {
+      const letters = w.replace(/[^\p{L}\p{N}]/gu, "").length;
+      const pause = i < words.length - 1 && /[,;:—–)]["”’]?$/.test(w) ? 3 : 0;
+      return letters + 1 + pause;
+    });
+    const total = weights.reduce((a, b) => a + b, 0);
+    const span = sentence.end - sentence.start;
+    let t = sentence.start;
+    return words.map((word, i) => {
+      const start = t;
+      t = i === words.length - 1 ? sentence.end : t + (span * weights[i]) / total;
+      return { word, start, end: t };
+    });
+  }
+
+  // Binary search over items sorted by start. During a gap the previous item stays active.
+  function findActive(items, t) {
+    let lo = 0, hi = items.length - 1, found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (items[mid].start <= t) { found = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    return found;
+  }
+
+  function formatTime(seconds) {
+    const s = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const pad = (n) => String(n).padStart(2, "0");
+    return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+  }
+
+  // The source text has no markup; section titles are short lines without end punctuation.
+  function isHeading(paragraph) {
+    if (paragraph.length !== 1) return false;
+    const text = paragraph[0].text.trim();
+    return text.length > 0 && text.length <= 80 && !/[.!?:;,"”’…]$/.test(text);
+  }
+
+  // Relative URL for a file path: escape names ("&", "#", spaces) but keep "/" separators.
+  function audioUrl(path) {
+    return path.split("/").map(encodeURIComponent).join("/");
+  }
+
+  return { SPEED, clampSpeed, wordTimes, findActive, formatTime, isHeading, audioUrl };
+})();
+</script>
+<script id="app">
+(() => {
+  const DATA = JSON.parse(document.getElementById("data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const audio = $("audio"), text = $("text"), chapterSel = $("chapter");
+  const pos = $("pos"), speed = $("speed"), playBtn = $("play"), followBtn = $("follow");
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  const ICON_PLAY = "M8 5v14l11-7z", ICON_PAUSE = "M6 5h4v14H6zm8 0h4v14h-4z";
+
+  // Browser storage is a convenience only; it may be unavailable (private mode, file://).
+  const storeKey = "audio-player:" + DATA.album;
+  const store = {
+    load() { try { return JSON.parse(localStorage.getItem(storeKey)) || {}; } catch { return {}; } },
+    save(patch) {
+      try { localStorage.setItem(storeKey, JSON.stringify({ ...store.load(), ...patch })); } catch { /* ignore */ }
+    },
+  };
+  const saved = store.load();
+  const positions = saved.positions || {};
+
+  let chapterIdx = 0;
+  let sentences = [];        // flat [{start, end, text, el, words?}]
+  let activeS = -1, activeW = -1, activeWordEls = null;
+  let following = true, seeking = false, lastSave = 0, rafId = 0;
+
+  document.title = DATA.album;
+  $("album").textContent = DATA.album;
+  DATA.chapters.forEach((ch, i) => chapterSel.add(new Option(ch.title, String(i))));
+
+  function renderChapter(ch) {
+    text.replaceChildren();
+    sentences = [];
+    ch.paragraphs.forEach((para, pIdx) => {
+      const block = document.createElement(pIdx === 0 ? "h2" : Core.isHeading(para) ? "h3" : "p");
+      para.forEach((s, sIdx) => {
+        if (sIdx) block.append(" ");
+        const span = document.createElement("span");
+        span.className = "s";
+        span.dataset.i = String(sentences.length);
+        // Same whitespace split as Core.wordTimes, so word spans line up with word timings.
+        s.text.split(/(\s+)/).forEach((tok) => {
+          if (!tok) return;
+          if (/^\s+$/.test(tok)) { span.append(tok); return; }
+          const w = document.createElement("span");
+          w.className = "w";
+          w.textContent = tok;
+          span.append(w);
+        });
+        block.append(span);
+        sentences.push({ ...s, el: span });
+      });
+      text.append(block);
+    });
+  }
+
+  function loadChapter(i, { autoplay = false, resume = true } = {}) {
+    chapterIdx = Math.max(0, Math.min(DATA.chapters.length - 1, i));
+    const ch = DATA.chapters[chapterIdx];
+    chapterSel.value = String(chapterIdx);
+    $("prev").disabled = chapterIdx === 0;
+    $("next").disabled = chapterIdx === DATA.chapters.length - 1;
+    renderChapter(ch);
+    activeS = activeW = -1;
+    activeWordEls = null;
+    following = true;
+    followBtn.hidden = true;
+    audio.src = Core.audioUrl(ch.audio);
+    audio.playbackRate = Number(speed.value);
+    const startAt = resume ? positions[ch.audio] || 0 : 0;
+    audio.addEventListener("loadedmetadata", () => {
+      if (startAt && startAt < audio.duration - 2) audio.currentTime = startAt;
+      audio.playbackRate = Number(speed.value);
+      updateTime();
+      sync(true);
+    }, { once: true });
+    if (autoplay) audio.play().catch(() => {});
+    window.scrollTo({ top: 0 });
+    store.save({ chapter: chapterIdx });
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: ch.title, album: DATA.album });
+    }
+  }
+
+  function savePosition(force) {
+    const now = Date.now();
+    if (!force && now - lastSave < 4000) return;
+    lastSave = now;
+    positions[DATA.chapters[chapterIdx].audio] = audio.ended ? 0 : audio.currentTime;
+    store.save({ positions });
+  }
+
+  function setActiveSentence(i, scroll) {
+    if (i === activeS) return;
+    if (activeS >= 0) sentences[activeS].el.classList.remove("on");
+    if (activeWordEls && activeW >= 0) activeWordEls[activeW].classList.remove("on");
+    activeS = i; activeW = -1; activeWordEls = null;
+    if (i < 0) return;
+    const s = sentences[i];
+    s.el.classList.add("on");
+    s.words ||= Core.wordTimes(s);
+    activeWordEls = s.el.querySelectorAll(".w");
+    if (following && scroll) {
+      s.el.scrollIntoView({ block: "center", behavior: reduceMotion.matches ? "auto" : "smooth" });
+    }
+  }
+
+  function sync(scroll = true) {
+    const t = audio.currentTime;
+    setActiveSentence(Core.findActive(sentences, t), scroll);
+    if (activeS < 0) return;
+    const s = sentences[activeS];
+    // Between sentences, leave the sentence tint but drop the word marker.
+    const w = t <= s.end ? Core.findActive(s.words, t) : -1;
+    if (w !== activeW) {
+      if (activeW >= 0) activeWordEls[activeW]?.classList.remove("on");
+      activeW = w;
+      if (w >= 0) activeWordEls[w]?.classList.add("on");
+    }
+  }
+
+  function updateTime() {
+    const d = audio.duration || 0;
+    pos.max = String(d);
+    if (!seeking) pos.value = String(audio.currentTime);
+    $("cur").textContent = Core.formatTime(audio.currentTime);
+    $("dur").textContent = Core.formatTime(d);
+    pos.setAttribute("aria-valuetext", `${Core.formatTime(audio.currentTime)} of ${Core.formatTime(d)}`);
+  }
+
+  function tick() {
+    sync();
+    updateTime();
+    savePosition(false);
+    rafId = audio.paused ? 0 : requestAnimationFrame(tick);
+  }
+
+  function setSpeed(v) {
+    const rate = Core.clampSpeed(v);
+    speed.value = String(rate);
+    audio.playbackRate = rate;
+    audio.preservesPitch = true;
+    $("speed-val").textContent = rate + "×";
+    speed.setAttribute("aria-valuetext", rate + " times");
+    store.save({ speed: rate });
+  }
+
+  function skip(seconds) {
+    audio.currentTime = Math.max(0, Math.min(audio.duration || 0, audio.currentTime + seconds));
+  }
+
+  function togglePlay() { audio.paused ? audio.play().catch(() => {}) : audio.pause(); }
+
+  function stopFollowing() {
+    if (!following || audio.paused) return;
+    following = false;
+    followBtn.hidden = false;
+  }
+
+  function resumeFollowing() {
+    following = true;
+    followBtn.hidden = true;
+    if (activeS >= 0) {
+      sentences[activeS].el.scrollIntoView({ block: "center", behavior: reduceMotion.matches ? "auto" : "smooth" });
+    }
+  }
+
+  // Audio events
+  audio.addEventListener("play", () => {
+    playBtn.setAttribute("aria-label", "Pause");
+    $("play-icon").setAttribute("d", ICON_PAUSE);
+    if (!rafId) rafId = requestAnimationFrame(tick);
+  });
+  audio.addEventListener("pause", () => {
+    playBtn.setAttribute("aria-label", "Play");
+    $("play-icon").setAttribute("d", ICON_PLAY);
+    savePosition(true);
+  });
+  audio.addEventListener("seeked", () => { updateTime(); sync(); savePosition(true); });
+  audio.addEventListener("timeupdate", () => { if (audio.paused) updateTime(); });
+  audio.addEventListener("ended", () => {
+    savePosition(true);
+    if (chapterIdx < DATA.chapters.length - 1) loadChapter(chapterIdx + 1, { autoplay: true, resume: false });
+  });
+
+  // Controls
+  playBtn.addEventListener("click", togglePlay);
+  $("back").addEventListener("click", () => skip(-15));
+  $("fwd").addEventListener("click", () => skip(15));
+  $("prev").addEventListener("click", () => loadChapter(chapterIdx - 1, { autoplay: !audio.paused }));
+  $("next").addEventListener("click", () => loadChapter(chapterIdx + 1, { autoplay: !audio.paused }));
+  chapterSel.addEventListener("change", () => loadChapter(Number(chapterSel.value), { autoplay: !audio.paused }));
+  speed.addEventListener("input", () => setSpeed(Number(speed.value)));
+  $("speed-reset").addEventListener("click", () => setSpeed(1));
+  pos.addEventListener("input", () => {
+    seeking = true;
+    $("cur").textContent = Core.formatTime(Number(pos.value));
+  });
+  pos.addEventListener("change", () => {
+    seeking = false;
+    following = true;
+    followBtn.hidden = true;
+    audio.currentTime = Number(pos.value);
+  });
+  followBtn.addEventListener("click", resumeFollowing);
+
+  // Clicking a sentence jumps there and keeps following.
+  text.addEventListener("click", (e) => {
+    if (getSelection().toString()) return; // let people select text without seeking
+    const el = e.target.closest(".s");
+    if (!el) return;
+    following = true;
+    followBtn.hidden = true;
+    audio.currentTime = sentences[Number(el.dataset.i)].start;
+    if (audio.paused) audio.play().catch(() => {});
+  });
+
+  // Manual scrolling pauses follow-along; programmatic scrolls don't fire these.
+  addEventListener("wheel", stopFollowing, { passive: true });
+  addEventListener("touchmove", stopFollowing, { passive: true });
+  addEventListener("keydown", (e) => {
+    const tag = e.target.tagName;
+    const inControl = ["INPUT", "SELECT", "BUTTON", "TEXTAREA"].includes(tag);
+    if (["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown"].includes(e.key) && !inControl) {
+      stopFollowing();
+    }
+    if (inControl) return;
+    if (e.key === " " || e.key === "k") { e.preventDefault(); togglePlay(); }
+    else if (e.key === "ArrowLeft" || e.key === "j") skip(-15);
+    else if (e.key === "ArrowRight" || e.key === "l") skip(15);
+  });
+
+  addEventListener("pagehide", () => savePosition(true));
+  document.addEventListener("visibilitychange", () => { if (document.hidden) savePosition(true); });
+
+  if ("mediaSession" in navigator) {
+    const ms = navigator.mediaSession;
+    ms.setActionHandler("play", () => audio.play());
+    ms.setActionHandler("pause", () => audio.pause());
+    ms.setActionHandler("seekbackward", () => skip(-15));
+    ms.setActionHandler("seekforward", () => skip(15));
+    ms.setActionHandler("previoustrack", () => loadChapter(chapterIdx - 1, { autoplay: true }));
+    ms.setActionHandler("nexttrack", () => loadChapter(chapterIdx + 1, { autoplay: true }));
+  }
+
+  setSpeed(saved.speed ?? 1);
+  loadChapter(Number.isInteger(saved.chapter) ? saved.chapter : 0);
+})();
+</script>
+</body>
+</html>
