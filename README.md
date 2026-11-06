@@ -6,7 +6,13 @@ A [Claude Code](https://claude.com/claude-code) skill that turns a PDF, Markdown
 /audiobook ~/Desktop/Some Book.pdf
 ```
 
-You get a folder you can zip and share:
+> [!IMPORTANT]
+> **For personal use only.** Audiobooks made with this tool are not meant for publication.
+> Most books, guides and articles are copyrighted, and narrating one is creating a derivative
+> work. Before you share any output, including the audio files, the player or the extracted
+> text, make sure you have permission from the rights holder.
+
+You get a folder like this:
 
 ```
 Some Book/

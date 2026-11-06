@@ -180,7 +180,7 @@ Tell the user:
 
 How the player works for them:
 - They double-click `Audio Player.html`. It works offline.
-- The whole folder can be zipped and shared.
+- The output is for personal use. Before sharing it, they need permission from the rights holder of the source text.
 - Position and speed are saved per browser.
 - The `.m4a` files are tagged, so they also work in any music or podcast app.
 
